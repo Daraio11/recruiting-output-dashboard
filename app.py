@@ -24,25 +24,32 @@ def load_data():
     df = pd.read_csv(DATA_PATH)
 
     def to_num(series: pd.Series) -> pd.Series:
-    s = series.copy()
+        s = series.copy()
 
-    # Convert to string early and keep it string
-    s = s.astype("string")
+        # Convert to string early and keep it string
+        s = s.astype("string")
 
-    # Normalize common missing tokens
-    s = s.replace(
-        {"nan": pd.NA, "None": pd.NA, "N/A": pd.NA, "NA": pd.NA, "—": pd.NA, "–": pd.NA}
-    )
+        # Normalize common missing tokens
+        s = s.replace(
+            {
+                "nan": pd.NA,
+                "None": pd.NA,
+                "N/A": pd.NA,
+                "NA": pd.NA,
+                "—": pd.NA,
+                "–": pd.NA,
+            }
+        )
 
-    # Strip formatting characters
-    s = (
-        s.str.replace("%", "", regex=False)
-         .str.replace("$", "", regex=False)
-         .str.replace(",", "", regex=False)
-         .str.strip()
-    )
+        # Strip formatting characters
+        s = (
+            s.str.replace("%", "", regex=False)
+             .str.replace("$", "", regex=False)
+             .str.replace(",", "", regex=False)
+             .str.strip()
+        )
 
-    return pd.to_numeric(s, errors="coerce")
+        return pd.to_numeric(s, errors="coerce")
 
     num_cols = [
         "stars", "industry_rating", "recruiting_pct",
@@ -53,6 +60,7 @@ def load_data():
         "def_grade", "def_grade_pct",
         "player_game_count"
     ]
+
     for c in num_cols:
         if c in df.columns:
             df[c] = to_num(df[c])
