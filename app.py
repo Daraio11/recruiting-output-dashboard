@@ -21,9 +21,31 @@ def fail_if_missing_data():
 
 @st.cache_data
 def load_data():
+    with st.expander("Debug: Data health (click to open)"):
+    st.write("Rows / Cols:", df.shape)
+    for c in ["performance_pct", "recruiting_pct", "perf_minus_recruit", "stars"]:
+        if c in df.columns:
+            st.write(c, "→ non-null:", int(df[c].notna().sum()),
+                     "min/max:", (df[c].min(), df[c].max()))
+    st.dataframe(df.head(10), use_container_width=True)
     df = pd.read_csv(DATA_PATH)
 
-    # Ensure numeric columns
+    def to_num(series: pd.Series) -> pd.Series:
+        s = series.astype(str)
+
+        s = (
+            s.replace({"nan": np.nan, "None": np.nan})
+             .str.replace("%", "", regex=False)
+             .str.replace("$", "", regex=False)
+             .str.replace(",", "", regex=False)
+             .str.replace("—", "", regex=False)
+             .str.replace("–", "", regex=False)
+             .str.replace("N/A", "", regex=False)
+             .str.replace("NA", "", regex=False)
+             .str.strip()
+        )
+        return pd.to_numeric(s, errors="coerce")
+
     num_cols = [
         "stars", "industry_rating", "recruiting_pct",
         "performance_pct", "perf_minus_recruit", "nil_value_usd",
@@ -35,12 +57,11 @@ def load_data():
     ]
     for c in num_cols:
         if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce")
+            df[c] = to_num(df[c])
 
-    # Clean categoricals
     for c in ["team_name", "position", "class_year", "player"]:
         if c in df.columns:
-            df[c] = df[c].fillna("UNKNOWN").astype(str)
+            df[c] = df[c].fillna("UNKNOWN").astype(str).str.strip()
 
     return df
 
@@ -105,8 +126,8 @@ def bytes_csv(df: pd.DataFrame) -> bytes:
 
 def report_preset(df: pd.DataFrame, preset: str) -> pd.DataFrame:
     """Saved views."""
-    x = df.copy()
-    if preset == "Custom (filters)":
+      x = df.copy()
+    if preset == "All Data (no preset)":
         return x
 
     if preset == "Late Bloomers (delta ≥ +20)":
@@ -202,7 +223,7 @@ with st.sidebar:
     preset = st.selectbox(
         "Choose a report",
         [
-            "Custom (filters)",
+            "All Data (no preset)",
             "Late Bloomers (delta ≥ +20)",
             "Blue-Chip Underperformers (recruit ≥ 80, delta ≤ -15)",
             "Elite Performers (performance ≥ 90)",
