@@ -24,20 +24,25 @@ def load_data():
     df = pd.read_csv(DATA_PATH)
 
     def to_num(series: pd.Series) -> pd.Series:
-        s = series.astype(str)
+    s = series.copy()
 
-        s = (
-            s.replace({"nan": np.nan, "None": np.nan})
-             .str.replace("%", "", regex=False)
-             .str.replace("$", "", regex=False)
-             .str.replace(",", "", regex=False)
-             .str.replace("—", "", regex=False)
-             .str.replace("–", "", regex=False)
-             .str.replace("N/A", "", regex=False)
-             .str.replace("NA", "", regex=False)
-             .str.strip()
-        )
-        return pd.to_numeric(s, errors="coerce")
+    # Convert to string early and keep it string
+    s = s.astype("string")
+
+    # Normalize common missing tokens
+    s = s.replace(
+        {"nan": pd.NA, "None": pd.NA, "N/A": pd.NA, "NA": pd.NA, "—": pd.NA, "–": pd.NA}
+    )
+
+    # Strip formatting characters
+    s = (
+        s.str.replace("%", "", regex=False)
+         .str.replace("$", "", regex=False)
+         .str.replace(",", "", regex=False)
+         .str.strip()
+    )
+
+    return pd.to_numeric(s, errors="coerce")
 
     num_cols = [
         "stars", "industry_rating", "recruiting_pct",
@@ -204,6 +209,7 @@ def team_roi_table(df: pd.DataFrame) -> pd.DataFrame:
 # App start
 # -----------------------
 fail_if_missing_data()
+st.cache_data.clear()
 df = load_data()
 
 st.title("Recruiting Output Dashboard")
