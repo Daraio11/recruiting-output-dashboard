@@ -119,7 +119,8 @@ def bytes_csv(df: pd.DataFrame) -> bytes:
 
 def report_preset(df: pd.DataFrame, preset: str) -> pd.DataFrame:
     """Saved views."""
-      x = df.copy()
+    x = df.copy()
+
     if preset == "All Data (no preset)":
         return x
 
