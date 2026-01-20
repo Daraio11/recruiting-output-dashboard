@@ -11,6 +11,7 @@ import streamlit as st
 st.set_page_config(page_title="Recruiting Output Dashboard", layout="wide")
 DATA_PATH = "data/PFF_Recruiting_Performance_Delta.csv"
 
+
 # -----------------------
 # Helpers
 # -----------------------
@@ -29,12 +30,8 @@ def load_data() -> pd.DataFrame:
     df = pd.read_csv(DATA_PATH)
 
     def to_num(series: pd.Series) -> pd.Series:
-        s = series.copy()
+        s = series.copy().astype("string")
 
-        # Force a consistent string dtype so .str always works
-        s = s.astype("string")
-
-        # Normalize missing tokens
         s = s.replace(
             {
                 "nan": pd.NA,
@@ -47,32 +44,64 @@ def load_data() -> pd.DataFrame:
             }
         )
 
-        # Strip formatting
         s = (
             s.str.replace("%", "", regex=False)
-             .str.replace("$", "", regex=False)
-             .str.replace(",", "", regex=False)
-             .str.strip()
+            .str.replace("$", "", regex=False)
+            .str.replace(",", "", regex=False)
+            .str.strip()
         )
 
         return pd.to_numeric(s, errors="coerce")
 
-    # Convert common numeric columns if present
+    # Robust numeric conversion if present
     num_cols = [
-        "stars", "industry_rating", "recruiting_pct",
-        "performance_pct", "perf_minus_recruit", "nil_value_usd",
-        "pass_grade", "pass_grade_pct",
-        "rec_grade", "rec_grade_pct",
-        "rush_grade", "rush_grade_pct",
-        "def_grade", "def_grade_pct",
+        "stars",
+        "industry_rating",
+        "recruiting_pct",
+        "performance_pct",
+        "perf_minus_recruit",
+        "nil_value_usd",
+        "pass_grade",
+        "pass_grade_pct",
+        "rec_grade",
+        "rec_grade_pct",
+        "rush_grade",
+        "rush_grade_pct",
+        "def_grade",
+        "def_grade_pct",
         "player_game_count",
+        "pass_attempts",
+        "accuracy_percent",
+        "avg_depth_of_target",
+        "avg_time_to_throw",
+        "big_time_throws",
+        "turnover_worthy_plays",
+        "targets",
+        "receptions",
+        "yards",
+        "yards_per_reception",
+        "drops",
+        "rush_attempts",
+        "yards_after_contact",
+        "tackles",
+        "stops",
+        "pressures",
+        "sacks",
+        "coverage_grade",
+        "pass_rush_grade",
+        "run_defense_grade",
+        "tackle_grade",
+        "interceptions",
+        "pass_break_ups",
+        "hits",
+        "hurries",
     ]
     for c in num_cols:
         if c in df.columns:
             df[c] = to_num(df[c])
 
-    # Trim strings on categoricals
-    for c in ["team_name", "position", "class_year", "player"]:
+    # Clean categoricals
+    for c in ["team_name", "position", "class_year", "player", "profile_url"]:
         if c in df.columns:
             df[c] = df[c].fillna("UNKNOWN").astype(str).str.strip()
 
@@ -124,7 +153,6 @@ def apply_sidebar_filters(
     rec_min: int,
     delta_range,
 ) -> pd.DataFrame:
-    # Categorical filters
     if position != "ALL" and "position" in x.columns:
         x = x[x["position"] == position]
     if team != "ALL" and "team_name" in x.columns:
@@ -132,11 +160,9 @@ def apply_sidebar_filters(
     if class_year != "ALL" and "class_year" in x.columns:
         x = x[x["class_year"] == class_year]
 
-    # Stars filter only if data exists
     if "stars" in x.columns and stars_range is not None and x["stars"].notna().any():
-        x = x[(x["stars"].fillna(-1) >= stars_range[0]) & (x["stars"].fillna(-1) <= stars_range[1])]
+        x = x[(x["stars"] >= stars_range[0]) & (x["stars"] <= stars_range[1])]
 
-    # Only apply numeric filters if column has at least one real value
     if "performance_pct" in x.columns and x["performance_pct"].notna().any():
         x = x[x["performance_pct"] >= perf_min]
 
@@ -154,33 +180,38 @@ def apply_chat_query(d: pd.DataFrame, q: str) -> pd.DataFrame:
     if not q:
         return d
 
-    # Position shortcuts
     pos_map = {
-        "qb": "QB", "rb": "RB", "wr": "WR", "te": "TE",
-        "ol": "OL", "dl": "DL", "lb": "LB", "db": "DB",
-        "cb": "CB", "s": "S", "edge": "EDGE", "de": "DE", "dt": "DT",
+        "qb": "QB",
+        "rb": "RB",
+        "wr": "WR",
+        "te": "TE",
+        "ol": "OL",
+        "dl": "DL",
+        "lb": "LB",
+        "db": "DB",
+        "cb": "CB",
+        "s": "S",
+        "edge": "EDGE",
+        "de": "DE",
+        "dt": "DT",
     }
     if "position" in d.columns:
         for k, v in pos_map.items():
             if re.search(rf"\b{k}\b", q):
                 d = d[d["position"].astype(str).str.upper() == v]
 
-    # Stars: "3 star", "4-star"
     m = re.search(r"(\d)\s*[- ]?star", q)
     if m and "stars" in d.columns:
         d = d[d["stars"] == int(m.group(1))]
 
-    # performance >= N
     m = re.search(r"(performance|perf)\s*(>=|>|at least)\s*(\d+)", q)
     if m and "performance_pct" in d.columns:
         d = d[d["performance_pct"] >= float(m.group(3))]
 
-    # recruiting >= N
     m = re.search(r"(recruiting|recruit)\s*(>=|>|at least)\s*(\d+)", q)
     if m and "recruiting_pct" in d.columns:
         d = d[d["recruiting_pct"] >= float(m.group(3))]
 
-    # delta > N / < N
     m = re.search(r"(delta)\s*(>=|>|<=|<)\s*(-?\d+)", q)
     if m and "perf_minus_recruit" in d.columns:
         op = m.group(2)
@@ -190,7 +221,6 @@ def apply_chat_query(d: pd.DataFrame, q: str) -> pd.DataFrame:
         else:
             d = d[d["perf_minus_recruit"] <= val]
 
-    # Team mention (exact match if name appears)
     if "team_name" in d.columns:
         teams = d["team_name"].dropna().astype(str).unique().tolist()
         for t in teams:
@@ -202,31 +232,148 @@ def apply_chat_query(d: pd.DataFrame, q: str) -> pd.DataFrame:
     return d
 
 
-def choose_columns(view: pd.DataFrame, mode: str) -> list:
+# Friendly display names (only for UI)
+FRIENDLY = {
+    "player": "Player",
+    "position": "Position",
+    "team_name": "Team",
+    "class_year": "Class Year",
+    "player_game_count": "Games",
+    "stars": "Stars",
+    "industry_rating": "Industry Rating",
+    "recruiting_pct": "Recruiting %ile",
+    "performance_pct": "Performance %ile",
+    "perf_minus_recruit": "Delta (Perf - Recruit)",
+    "nil_value_usd": "NIL ($)",
+    "pass_grade": "Pass Grade",
+    "pass_grade_pct": "Pass %ile",
+    "rec_grade": "Receiving Grade",
+    "rec_grade_pct": "Receiving %ile",
+    "rush_grade": "Rushing Grade",
+    "rush_grade_pct": "Rushing %ile",
+    "def_grade": "Defense Grade",
+    "def_grade_pct": "Defense %ile",
+    "coverage_grade": "Coverage Grade",
+    "pass_rush_grade": "Pass Rush Grade",
+    "run_defense_grade": "Run Defense Grade",
+    "tackle_grade": "Tackle Grade",
+    "pass_attempts": "Pass Att",
+    "accuracy_percent": "Accuracy %",
+    "avg_depth_of_target": "aDOT",
+    "avg_time_to_throw": "Time to Throw",
+    "big_time_throws": "Big Time Throws",
+    "turnover_worthy_plays": "TWP",
+    "targets": "Targets",
+    "receptions": "Receptions",
+    "yards": "Yards",
+    "yards_per_reception": "Yds/Rec",
+    "drops": "Drops",
+    "rush_attempts": "Rush Att",
+    "yards_after_contact": "YAC (Contact)",
+    "tackles": "Tackles",
+    "stops": "Stops",
+    "pressures": "Pressures",
+    "sacks": "Sacks",
+    "interceptions": "INT",
+    "pass_break_ups": "PBU",
+    "hits": "Hits",
+    "hurries": "Hurries",
+    "profile_url": "Profile URL",
+}
+
+
+def prettify_for_display(df_in: pd.DataFrame, cols: list[str]) -> tuple[pd.DataFrame, dict]:
+    """
+    Returns:
+      - display_df: subset with renamed columns for UI
+      - column_config: streamlit column config (for clickable links, etc.)
+    """
+    df_out = df_in.copy()
+
+    # Keep only cols (if provided)
+    if cols:
+        keep = [c for c in cols if c in df_out.columns]
+        df_out = df_out[keep]
+
+    # Rename columns for display
+    rename_map = {c: FRIENDLY.get(c, c.replace("_", " ").title()) for c in df_out.columns}
+    df_out = df_out.rename(columns=rename_map)
+
+    # Make Profile URL clickable (if present)
+    col_config = {}
+    profile_label = FRIENDLY.get("profile_url", "Profile URL")
+    if profile_label in df_out.columns:
+        col_config[profile_label] = st.column_config.LinkColumn(
+            label=profile_label,
+            display_text="Open",
+        )
+
+    return df_out, col_config
+
+
+def choose_columns(view: pd.DataFrame, mode: str) -> list[str]:
+    # IMPORTANT: profile_url is placed at END by design.
     base = [
-        "player", "position", "team_name", "class_year",
-        "stars", "industry_rating", "recruiting_pct",
-        "performance_pct", "perf_minus_recruit",
-        "nil_value_usd", "profile_url",
+        "player",
+        "position",
+        "team_name",
+        "class_year",
+        "player_game_count",
+        "stars",
+        "industry_rating",
+        "recruiting_pct",
+        "performance_pct",
+        "perf_minus_recruit",
+        "nil_value_usd",
     ]
 
     if mode == "QB":
         base += [
-            "pass_grade", "pass_grade_pct", "pass_attempts", "accuracy_percent",
-            "avg_depth_of_target", "avg_time_to_throw", "big_time_throws", "turnover_worthy_plays",
+            "pass_grade",
+            "pass_grade_pct",
+            "pass_attempts",
+            "accuracy_percent",
+            "avg_depth_of_target",
+            "avg_time_to_throw",
+            "big_time_throws",
+            "turnover_worthy_plays",
         ]
     elif mode == "SKILL":
         base += [
-            "rec_grade", "rec_grade_pct", "targets", "receptions", "yards",
-            "yards_per_reception", "drops", "rush_grade", "rush_grade_pct",
-            "rush_attempts", "yards_after_contact",
+            "rec_grade",
+            "rec_grade_pct",
+            "targets",
+            "receptions",
+            "yards",
+            "yards_per_reception",
+            "drops",
+            "rush_grade",
+            "rush_grade_pct",
+            "rush_attempts",
+            "yards_after_contact",
         ]
     elif mode == "DEF":
         base += [
-            "def_grade", "def_grade_pct", "coverage_grade", "pass_rush_grade",
-            "run_defense_grade", "tackle_grade", "tackles", "stops", "pressures", "sacks",
+            "def_grade",
+            "def_grade_pct",
+            "coverage_grade",
+            "pass_rush_grade",
+            "run_defense_grade",
+            "tackle_grade",
+            "tackles",
+            "stops",
+            "pressures",
+            "sacks",
+            "interceptions",
+            "pass_break_ups",
+            "hits",
+            "hurries",
         ]
 
+    # profile_url always last
+    base += ["profile_url"]
+
+    # keep only existing
     return [c for c in base if c in view.columns]
 
 
@@ -236,7 +383,6 @@ def team_roi_table(df_in: pd.DataFrame) -> pd.DataFrame:
 
     x = df_in.copy()
 
-    # If key columns missing, still show counts by team
     if not {"recruiting_pct", "performance_pct", "perf_minus_recruit"}.issubset(x.columns):
         return x.groupby("team_name", dropna=False).agg(players=("player", "count")).reset_index()
 
@@ -253,15 +399,18 @@ def team_roi_table(df_in: pd.DataFrame) -> pd.DataFrame:
     return grp.sort_values(["avg_delta", "players"], ascending=[False, False])
 
 
-def render_table(title: str, data: pd.DataFrame, cols: list, download_name: str) -> None:
+def render_table(title: str, data: pd.DataFrame, cols: list[str], download_name: str) -> None:
     st.subheader(title)
     st.write(f"Rows: {len(data):,}")
+
+    # Display dataframe (pretty headers + clickable links)
+    display_df, col_config = prettify_for_display(data, cols)
 
     c1, c2 = st.columns([1, 2])
     with c1:
         st.download_button(
             label="⬇️ Download filtered CSV",
-            data=bytes_csv(data[cols] if cols else data),
+            data=bytes_csv(display_df),
             file_name=download_name,
             mime="text/csv",
             use_container_width=True,
@@ -269,7 +418,56 @@ def render_table(title: str, data: pd.DataFrame, cols: list, download_name: str)
     with c2:
         st.caption("Exports exactly what you're viewing (after preset + filters + chat).")
 
-    st.dataframe(data[cols] if cols else data, use_container_width=True, hide_index=True)
+    st.dataframe(
+        display_df,
+        use_container_width=True,
+        hide_index=True,
+        column_config=col_config,
+    )
+
+
+def render_about_tab() -> None:
+    st.title("About")
+    st.caption("What these columns mean, how they were derived, and how to interpret the outputs.")
+
+    st.markdown(
+        """
+### Data Sources
+- **Recruiting (On3 / Rivals export):** provides recruit baseline attributes like `industry_rating`, stars, and class year.
+- **PFF:** provides on-field performance grades across passing/receiving/rushing/defense.
+
+### Industry Rating
+**`industry_rating`** is a *recruiting* baseline score from the On3/Rivals “industry” feed.  
+Think: **pre-college expectation** for a player. Higher = more highly regarded prospect.
+
+### Recruiting Percentile
+**`recruiting_pct`** is the player’s percentile rank (0–100) within the recruiting dataset based on `industry_rating`.  
+- 90 = top 10% recruit  
+- 50 = average recruit  
+- 20 = bottom 20%
+
+### Performance Percentile
+**`performance_pct`** is the player’s percentile rank (0–100) derived from PFF performance measures included in this dataset.
+It represents **how the player performed on-field relative to peers** in the current dataset.
+
+### Delta (Performance minus Recruiting)
+**`perf_minus_recruit`** is the main “development signal”:
+
+`perf_minus_recruit = performance_pct − recruiting_pct`
+
+- Positive = player is outperforming recruiting expectation (late bloomer / development win)
+- Negative = underperforming expectation
+
+### Team ROI (Return on Investment)
+Team ROI aggregates player deltas at the team level:
+- **Avg Delta** = average `perf_minus_recruit` across matched players on the team  
+Higher Avg Delta implies the program is **getting more on-field performance than recruiting profiles predicted**.
+
+### Notes / Caveats
+- This dashboard relies on **matched player records** across sources (PFF × recruiting). Not every player will match.
+- Percentiles are computed within the current dataset scope (as exported), so reruns with different data can shift percentile values.
+"""
+    )
 
 
 # -----------------------
@@ -277,28 +475,18 @@ def render_table(title: str, data: pd.DataFrame, cols: list, download_name: str)
 # -----------------------
 fail_if_missing_data()
 
-# Temporary: ensure cache doesn't preserve old parsing during debugging
-st.cache_data.clear()
+# Clear cache via a button (safer than always clearing)
+with st.sidebar:
+    if st.button("Reload data"):
+        st.cache_data.clear()
 
 df = load_data()
 
 st.title("Recruiting Output Dashboard")
 st.caption("PFF performance + recruiting baseline (industry_rating) + delta metrics (HIGH_CONF matches)")
 
-with st.expander("Debug: Data Health"):
-    st.write("Rows / Cols:", df.shape)
-    st.write("Columns:", list(df.columns))
-    for c in ["performance_pct", "recruiting_pct", "perf_minus_recruit", "industry_rating", "stars", "nil_value_usd"]:
-        if c in df.columns:
-            st.write(
-                c,
-                "| non-null:", int(df[c].notna().sum()),
-                "| min/max:", (df[c].min(), df[c].max()),
-            )
-    st.dataframe(df.head(25), use_container_width=True)
-
 # -----------------------
-# Sidebar
+# Sidebar controls
 # -----------------------
 with st.sidebar:
     st.header("Saved Views")
@@ -327,8 +515,8 @@ with st.sidebar:
     class_year = st.selectbox("Class Year", year_options, index=0)
 
     stars_range = st.slider("Stars", 0, 5, (0, 5)) if "stars" in df.columns else None
-    perf_min = st.slider("Min Performance %", 0, 100, 0)
-    rec_min = st.slider("Min Recruiting %", 0, 100, 0)
+    perf_min = st.slider("Min Performance %ile", 0, 100, 0)
+    rec_min = st.slider("Min Recruiting %ile", 0, 100, 0)
     delta_range = st.slider("Delta (Perf - Recruit)", -100, 100, (-100, 100))
 
     st.divider()
@@ -347,9 +535,12 @@ if "perf_minus_recruit" in view.columns and view["perf_minus_recruit"].notna().a
 # -----------------------
 # Tabs
 # -----------------------
-tab_overview, tab_qb, tab_skill, tab_def, tab_team = st.tabs(
-    ["All Data", "QB", "Skill (RB/WR/TE)", "Defense", "Team ROI"]
+tab_about, tab_overview, tab_qb, tab_skill, tab_def, tab_team = st.tabs(
+    ["About", "All Data", "QB", "Skill (RB/WR/TE)", "Defense", "Team ROI"]
 )
+
+with tab_about:
+    render_about_tab()
 
 with tab_overview:
     cols = choose_columns(view, mode="BASE")
@@ -388,11 +579,24 @@ with tab_team:
         min_players = st.slider("Min matched players per team", 1, 50, 10)
         roi2 = roi[roi["players"] >= min_players].copy() if "players" in roi.columns else roi.copy()
 
-        st.write(f"Teams shown: {len(roi2):,}")
+        display_roi = roi2.rename(
+            columns={
+                "team_name": "Team",
+                "players": "Players",
+                "avg_recruit": "Avg Recruiting %ile",
+                "avg_perf": "Avg Performance %ile",
+                "avg_delta": "Avg Delta",
+                "med_delta": "Median Delta",
+                "pct_elite": "% Elite (≥90 %ile)",
+                "pct_late_bloom": "% Late Bloomers (≥+20)",
+            }
+        )
+
+        st.write(f"Teams shown: {len(display_roi):,}")
         st.download_button(
             label="⬇️ Download Team ROI CSV",
-            data=bytes_csv(roi2),
+            data=bytes_csv(display_roi),
             file_name="RecruitingOutput_Team_ROI.csv",
             mime="text/csv",
         )
-        st.dataframe(roi2, use_container_width=True, hide_index=True)
+        st.dataframe(display_roi, use_container_width=True, hide_index=True)
