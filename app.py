@@ -13,6 +13,12 @@ DATA_PATH = "data/PFF_Recruiting_Performance_Delta.csv"
 st.write("Looking for data at:", DATA_PATH)
 st.write("File exists:", Path(DATA_PATH).exists())
 
-if not Path(DATA_PATH).exists():
-    st.error(f"Data file not found: {DATA_PATH}. Check the repo has it at /data/ with exact name.")
-    st.stop()
+import os
+st.write("📁 Repo root contents:")
+st.write(os.listdir("."))
+
+if os.path.exists("data"):
+    st.write("📁 data/ folder contents:")
+    st.write(os.listdir("data"))
+else:
+    st.write("❌ No data/ folder found")
