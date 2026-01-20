@@ -332,4 +332,4 @@ with tab_team:
         mime="text/csv"
     )
 
-    st.dataframe(roi2, use_container_width=True, hide_index=True))
+    st.dataframe(roi2, use_container_width=True, hide_index=True)
