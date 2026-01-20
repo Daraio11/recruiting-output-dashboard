@@ -21,19 +21,6 @@ def fail_if_missing_data():
 
 @st.cache_data
 def load_data():
-    with st.expander("Debug: Data health (click to open)"):
-    st.write("Rows / Cols:", df.shape)
-    st.write("Columns:", list(df.columns))
-    for c in ["performance_pct", "recruiting_pct", "perf_minus_recruit", "stars", "industry_rating"]:
-        if c in df.columns:
-            st.write(
-                c,
-                "non-null:",
-                int(df[c].notna().sum()),
-                "min/max:",
-                (df[c].min(), df[c].max())
-            )
-    st.dataframe(df.head(10), use_container_width=True)
     df = pd.read_csv(DATA_PATH)
 
     def to_num(series: pd.Series) -> pd.Series:
